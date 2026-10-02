@@ -1,0 +1,5 @@
+.pio
+.vscode
+.cache
+.dummy
+compile_commands.json
