@@ -43,7 +43,7 @@ void setup() {
     chrBLEMIDI::Config config;
     config.name = "chrBLEMIDI Basic";
 
-    chrBLEMIDI::onEvent(onMidiEvent);
+    chrBLEMIDI::setEventCallback(onMidiEvent);
     chrBLEMIDI::setup(config);
 
     if (!chrBLEMIDI::enable()) {

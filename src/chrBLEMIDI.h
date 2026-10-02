@@ -32,7 +32,7 @@ namespace chrBLEMIDI {
         uint16_t maxPreferred = 0x12;
     };
 
-    void onEvent(EventCallback cb);
+    void setEventCallback(EventCallback cb);
 
     void setup(const Config& config);
     const Config& getConfig();

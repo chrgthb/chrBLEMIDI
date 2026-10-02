@@ -4,30 +4,31 @@
 #include <cstring>
 
 namespace chrBLEMIDI {
-    static EventCallback onEventCallback = nullptr;
-    static Config config;
+namespace {
+    EventCallback _onEvent = nullptr;
+    Config _config;
 
-    static bool enabled = false;
-    static bool deinitPending = false;
-    static NimBLEServer* server = nullptr;
-    static NimBLECharacteristic* characteristic = nullptr;
-    static void fireEvent(int8_t code, const char* action, uint8_t* data = nullptr, uint32_t len = 0) {
-        if (!onEventCallback) return;
-        onEventCallback(code, action, data, len);
+    bool _enabled = false;
+    bool _deinitPending = false;
+    NimBLEServer* _server = nullptr;
+    NimBLECharacteristic* _characteristic = nullptr;
+    void _fireEvent(int8_t code, const char* action, uint8_t* data = nullptr, uint32_t len = 0) {
+        if (!_onEvent) return;
+        _onEvent(code, action, data, len);
     }
 
-    static bool startAdvertising() {
+    bool _startAdvertising() {
         NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
         if (advertising == nullptr || !advertising->start()) {
-            fireEvent(EVENT_ERR, "advertising failed", nullptr, 0);
+            _fireEvent(EVENT_ERR, "advertising failed", nullptr, 0);
             return false;
         }
 
-        fireEvent(EVENT_ADVERTISING, "advertising started", nullptr, 0);
+        _fireEvent(EVENT_ADVERTISING, "advertising started", nullptr, 0);
         return true;
     }
 
-    static uint8_t getMidiDataLength(uint8_t status) {
+    uint8_t _getMidiDataLength(uint8_t status) {
         switch (status & 0xF0) {
             case 0x80:
             case 0x90:
@@ -45,12 +46,12 @@ namespace chrBLEMIDI {
         }
     }
 
-    static void emitReadEvent(uint8_t* msg, size_t len) {
+    void _emitReadEvent(uint8_t* msg, size_t len) {
         if (len == 0) return;
-        fireEvent(EVENT_READ, "read", msg, static_cast<uint32_t>(len));
+        _fireEvent(EVENT_READ, "read", msg, static_cast<uint32_t>(len));
     }
 
-    static void processMidiPayload(const uint8_t* data, size_t len) {
+    void _processMidiPayload(const uint8_t* data, size_t len) {
         if (data == nullptr || len < 3) return;
 
         size_t ptr = 1;
@@ -93,7 +94,7 @@ namespace chrBLEMIDI {
                     ptr++;
                 }
             } else if (msgLen > 0 && msgBuf[0] < 0xF8) {
-                uint8_t expectedDataLen = getMidiDataLength(msgBuf[0]);
+                uint8_t expectedDataLen = _getMidiDataLength(msgBuf[0]);
                 for (uint8_t i = 0; i < expectedDataLen && ptr < len; i++) {
                     if (data[ptr] < 0x80) {
                         if (msgLen < sizeof(msgBuf)) msgBuf[msgLen++] = data[ptr];
@@ -104,95 +105,97 @@ namespace chrBLEMIDI {
                 }
             }
 
-            emitReadEvent(msgBuf, msgLen);
+            _emitReadEvent(msgBuf, msgLen);
         }
     }
 
-    static void finishDisable() {
-        server = nullptr;
-        characteristic = nullptr;
-        deinitPending = false;
-        fireEvent(EVENT_DISABLED, "transport disabled", nullptr, 0);
+    void _finishDisable() {
+        _server = nullptr;
+        _characteristic = nullptr;
+        _deinitPending = false;
+        _fireEvent(EVENT_DISABLED, "transport disabled", nullptr, 0);
     }
 
-    class ServerCallbacks : public NimBLEServerCallbacks {
+    class _ServerCallbacks : public NimBLEServerCallbacks {
     public:
         void onConnect(NimBLEServer* connectedServer, NimBLEConnInfo& connInfo) override {
             (void)connectedServer;
             (void)connInfo;
-            fireEvent(EVENT_CONNECT, "connected", nullptr, 0);
+            _fireEvent(EVENT_CONNECT, "connected", nullptr, 0);
         }
 
         void onDisconnect(NimBLEServer* disconnectedServer, NimBLEConnInfo& connInfo, int reason) override {
             (void)disconnectedServer;
             (void)connInfo;
             (void)reason;
-            fireEvent(EVENT_DISCONNECT, "disconnected", nullptr, 0);
+            _fireEvent(EVENT_DISCONNECT, "disconnected", nullptr, 0);
 
-            if (enabled) {
-                startAdvertising();
+            if (_enabled) {
+                _startAdvertising();
             }
         }
     };
 
-    class CharacteristicCallbacks : public NimBLECharacteristicCallbacks {
+    class _CharacteristicCallbacks : public NimBLECharacteristicCallbacks {
     public:
         void onWrite(NimBLECharacteristic* targetCharacteristic, NimBLEConnInfo& connInfo) override {
             (void)connInfo;
-            if (!enabled) return;
+            if (!_enabled) return;
 
             const NimBLEAttValue value = targetCharacteristic->getValue();
             const uint8_t* data = value.data();
             const size_t len = value.size();
 
             if (data != nullptr && len > 0) {
-                processMidiPayload(data, len);
+                _processMidiPayload(data, len);
             }
         }
 
     };
+}
 
-    void onEvent(EventCallback cb) {
-        onEventCallback = cb;
+    void setEventCallback(EventCallback cb) {
+        _onEvent = cb;
     }
 
     void setup(const Config& newConfig) {
-        config = newConfig;
+        _fireEvent(EVENT_NOTICE, "init...", nullptr, 0);
+        _config = newConfig;
     }
 
     const Config& getConfig() {
-        return config;
+        return _config;
     }
 
     bool enable() {
-        deinitPending = false;
+        _deinitPending = false;
 
-        if (enabled && NimBLEDevice::isInitialized()) {
+        if (_enabled && NimBLEDevice::isInitialized()) {
             return true;
         }
 
-        if (!NimBLEDevice::isInitialized() || server == nullptr) {
-            if (!NimBLEDevice::init(config.name)) {
-                fireEvent(EVENT_ERR, "init failed", nullptr, 0);
+        if (!NimBLEDevice::isInitialized() || _server == nullptr) {
+            if (!NimBLEDevice::init(_config.name)) {
+                _fireEvent(EVENT_ERR, "init failed", nullptr, 0);
                 return false;
             }
 
-            server = NimBLEDevice::createServer();
-            if (server == nullptr) {
-                fireEvent(EVENT_ERR, "create server failed", nullptr, 0);
+            _server = NimBLEDevice::createServer();
+            if (_server == nullptr) {
+                _fireEvent(EVENT_ERR, "create server failed", nullptr, 0);
                 return false;
             }
 
-            server->setCallbacks(new ServerCallbacks());
+            _server->setCallbacks(new _ServerCallbacks());
 
-            NimBLEService* midiService = server->createService(config.midiServiceUuid);
+            NimBLEService* midiService = _server->createService(_config.midiServiceUuid);
             if (midiService == nullptr) {
-                fireEvent(EVENT_ERR, "create service failed", nullptr, 0);
+                _fireEvent(EVENT_ERR, "create service failed", nullptr, 0);
                 return false;
             }
 
-            characteristic = midiService->createCharacteristic(
-                config.midiCharacteristicUuid,
+            _characteristic = midiService->createCharacteristic(
+                _config.midiCharacteristicUuid,
                 NIMBLE_PROPERTY::READ |
                     NIMBLE_PROPERTY::WRITE |
                     NIMBLE_PROPERTY::WRITE_NR |
@@ -200,52 +203,52 @@ namespace chrBLEMIDI {
                     NIMBLE_PROPERTY::INDICATE
             );
 
-            if (characteristic == nullptr) {
-                fireEvent(EVENT_ERR, "create characteristic failed", nullptr, 0);
+            if (_characteristic == nullptr) {
+                _fireEvent(EVENT_ERR, "create characteristic failed", nullptr, 0);
                 return false;
             }
 
-            characteristic->setCallbacks(new CharacteristicCallbacks());
+            _characteristic->setCallbacks(new _CharacteristicCallbacks());
             static const uint8_t emptyValue[] = {0};
-            characteristic->setValue(emptyValue, 0);
+            _characteristic->setValue(emptyValue, 0);
 
-            server->start();
+            _server->start();
         }
 
         NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
         if (advertising == nullptr) {
-            fireEvent(EVENT_ERR, "get advertising failed", nullptr, 0);
+            _fireEvent(EVENT_ERR, "get advertising failed", nullptr, 0);
             return false;
         }
 
-        advertising->addServiceUUID(config.midiServiceUuid);
-        advertising->enableScanResponse(config.advertiseScanResponse);
-        advertising->setPreferredParams(config.minPreferred, config.maxPreferred);
+        advertising->addServiceUUID(_config.midiServiceUuid);
+        advertising->enableScanResponse(_config.advertiseScanResponse);
+        advertising->setPreferredParams(_config.minPreferred, _config.maxPreferred);
 
-        if (!startAdvertising()) {
+        if (!_startAdvertising()) {
             return false;
         }
 
-        enabled = true;
+        _enabled = true;
 
-        fireEvent(EVENT_ENABLED, "transport enabled", nullptr, 0);
+        _fireEvent(EVENT_ENABLED, "transport enabled", nullptr, 0);
         return true;
     }
 
     void disable() {
-        if (!enabled && !NimBLEDevice::isInitialized()) return;
+        if (!_enabled && !NimBLEDevice::isInitialized()) return;
 
-        enabled = false;
+        _enabled = false;
         NimBLEDevice::stopAdvertising();
 
-        if (NimBLEDevice::isInitialized() && server != nullptr && server->getConnectedCount() > 0) {
-            auto peers = server->getPeerDevices();
+        if (NimBLEDevice::isInitialized() && _server != nullptr && _server->getConnectedCount() > 0) {
+            auto peers = _server->getPeerDevices();
             for (const auto& peer : peers) {
-                server->disconnect(peer);
+                _server->disconnect(peer);
             }
 
-            deinitPending = true;
-            fireEvent(EVENT_NOTICE, "waiting for disconnection", nullptr, 0);
+            _deinitPending = true;
+            _fireEvent(EVENT_NOTICE, "waiting for disconnection", nullptr, 0);
             return;
         }
 
@@ -253,37 +256,37 @@ namespace chrBLEMIDI {
             NimBLEDevice::deinit();
         }
 
-        finishDisable();
+        _finishDisable();
     }
 
     void loop() {
-        if (deinitPending && NimBLEDevice::isInitialized() && server != nullptr && server->getConnectedCount() == 0) {
+        if (_deinitPending && NimBLEDevice::isInitialized() && _server != nullptr && _server->getConnectedCount() == 0) {
             NimBLEDevice::deinit();
-            finishDisable();
+            _finishDisable();
         }
     }
 
     bool write(uint8_t* data, uint32_t len) {
         if (data == nullptr || len == 0) {
-            fireEvent(EVENT_WARN, "write ignored: empty data", nullptr, 0);
+            _fireEvent(EVENT_WARN, "write ignored: empty data", nullptr, 0);
             return false;
         }
 
-        if (!enabled || !NimBLEDevice::isInitialized() || characteristic == nullptr) {
-            fireEvent(EVENT_WARN, "write ignored: transport not ready", nullptr, 0);
+        if (!_enabled || !NimBLEDevice::isInitialized() || _characteristic == nullptr) {
+            _fireEvent(EVENT_WARN, "write ignored: transport not ready", nullptr, 0);
             return false;
         }
 
-        characteristic->setValue(data, len);
-        characteristic->notify();
-        processMidiPayload(data, len);
+        _characteristic->setValue(data, len);
+        _characteristic->notify();
+        _processMidiPayload(data, len);
 
-        fireEvent(EVENT_WRITE, "write", data, len);
+        _fireEvent(EVENT_WRITE, "write", data, len);
         return true;
     }
 
     bool isEnabled() {
-        return enabled;
+        return _enabled;
     }
 
     bool isInitialized() {
@@ -296,12 +299,12 @@ namespace chrBLEMIDI {
     }
 
     bool hasPendingDisable() {
-        return deinitPending;
+        return _deinitPending;
     }
 
     uint16_t connectedCount() {
-        if (!NimBLEDevice::isInitialized() || server == nullptr) return 0;
-        return server->getConnectedCount();
+        if (!NimBLEDevice::isInitialized() || _server == nullptr) return 0;
+        return _server->getConnectedCount();
     }
 
 }

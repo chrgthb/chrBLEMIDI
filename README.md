@@ -37,7 +37,7 @@ void setup() {
     chrBLEMIDI::Config config;
     config.name = "My BLE MIDI Device";
 
-    chrBLEMIDI::onEvent(onMidiEvent);
+    chrBLEMIDI::setEventCallback(onMidiEvent);
     chrBLEMIDI::setup(config);
 
     if (!chrBLEMIDI::enable()) {
@@ -80,7 +80,7 @@ Pass the configured value to `setup()` before calling `enable()`.
 
 ## Events and Lifecycle
 
-Register one `EventCallback` with `onEvent()`. Each event provides a numeric code, a short action string, an optional data pointer, and its length. Event codes are declared in [src/chrBLEMIDI.h](src/chrBLEMIDI.h):
+Register one `EventCallback` with `setEventCallback()`. Each event provides a numeric code, a short action string, an optional data pointer, and its length. Event codes are declared in [src/chrBLEMIDI.h](src/chrBLEMIDI.h):
 
 | Code | Value | Meaning |
 | --- | ---: | --- |
