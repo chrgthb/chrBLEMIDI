@@ -4,22 +4,27 @@
 #include <functional>
 
 namespace chrBLEMIDI {
-    using EventCallback = std::function<void(int8_t, const char*, uint8_t*, uint32_t)>;
+    using EventCallback = std::function<void(int8_t, uint8_t*, uint32_t)>;
 
     // Event codes
     // - no data events get data == nullptr and len == 0
     enum EventCode {
-        EVENT_ERR = -10,
-        EVENT_WARN = -1,
-        EVENT_OK = 0,
-        EVENT_NOTICE = 10,
+        EVENT_ERR_ADVERT = -30,
+        EVENT_ERR_CHAR = -25,
+        EVENT_ERR_SERVICE = -20,
+        EVENT_ERR_SERVER = -15,
+        EVENT_ERR_INIT = -10,
+        EVENT_WARN_TRANSP_NOT_READY = -6,
+        EVENT_WARN_NODATA = -5,
+        EVENT_INIT = 0,
+        EVENT_NOTICE_WAIT = 10,
         EVENT_CONNECT = 20,
-        EVENT_DISCONNECT = 22,
-        EVENT_ENABLED = 24,
-        EVENT_ADVERTISING = 25,
-        EVENT_DISABLED = 26,
-        EVENT_READ = 30,
-        EVENT_WRITE = 32
+        EVENT_DISCONNECT = 25,
+        EVENT_ENABLED = 30,
+        EVENT_ADVERTISING = 35,
+        EVENT_DISABLED = 40,
+        EVENT_READ = 45,
+        EVENT_WRITE = 50
     };
 
     struct Config {
@@ -49,5 +54,7 @@ namespace chrBLEMIDI {
     bool isAdvertising();
     bool hasPendingDisable();
     uint16_t connectedCount();
+
+    const char* eventName(EventCode code);
 
 }

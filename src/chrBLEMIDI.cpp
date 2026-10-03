@@ -12,19 +12,19 @@ namespace {
     bool _deinitPending = false;
     NimBLEServer* _server = nullptr;
     NimBLECharacteristic* _characteristic = nullptr;
-    void _fireEvent(int8_t code, const char* action, uint8_t* data = nullptr, uint32_t len = 0) {
+    void _fireEvent(EventCode code, uint8_t* data = nullptr, uint32_t len = 0) {
         if (!_onEvent) return;
-        _onEvent(code, action, data, len);
+        _onEvent(code, data, len);
     }
 
     bool _startAdvertising() {
         NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
         if (advertising == nullptr || !advertising->start()) {
-            _fireEvent(EVENT_ERR, "advertising failed", nullptr, 0);
+            _fireEvent(EVENT_ERR_ADVERT, nullptr, 0);
             return false;
         }
 
-        _fireEvent(EVENT_ADVERTISING, "advertising started", nullptr, 0);
+        _fireEvent(EVENT_ADVERTISING, nullptr, 0);
         return true;
     }
 
@@ -48,7 +48,7 @@ namespace {
 
     void _emitReadEvent(uint8_t* msg, size_t len) {
         if (len == 0) return;
-        _fireEvent(EVENT_READ, "read", msg, static_cast<uint32_t>(len));
+        _fireEvent(EVENT_READ, msg, static_cast<uint32_t>(len));
     }
 
     void _processMidiPayload(const uint8_t* data, size_t len) {
@@ -113,7 +113,7 @@ namespace {
         _server = nullptr;
         _characteristic = nullptr;
         _deinitPending = false;
-        _fireEvent(EVENT_DISABLED, "transport disabled", nullptr, 0);
+        _fireEvent(EVENT_DISABLED, nullptr, 0);
     }
 
     class _ServerCallbacks : public NimBLEServerCallbacks {
@@ -121,14 +121,14 @@ namespace {
         void onConnect(NimBLEServer* connectedServer, NimBLEConnInfo& connInfo) override {
             (void)connectedServer;
             (void)connInfo;
-            _fireEvent(EVENT_CONNECT, "connected", nullptr, 0);
+            _fireEvent(EVENT_CONNECT, nullptr, 0);
         }
 
         void onDisconnect(NimBLEServer* disconnectedServer, NimBLEConnInfo& connInfo, int reason) override {
             (void)disconnectedServer;
             (void)connInfo;
             (void)reason;
-            _fireEvent(EVENT_DISCONNECT, "disconnected", nullptr, 0);
+            _fireEvent(EVENT_DISCONNECT, nullptr, 0);
 
             if (_enabled) {
                 _startAdvertising();
@@ -159,7 +159,7 @@ namespace {
     }
 
     void setup(const Config& newConfig) {
-        _fireEvent(EVENT_NOTICE, "init...", nullptr, 0);
+        _fireEvent(EVENT_INIT, nullptr, 0);
         _config = newConfig;
     }
 
@@ -176,13 +176,13 @@ namespace {
 
         if (!NimBLEDevice::isInitialized() || _server == nullptr) {
             if (!NimBLEDevice::init(_config.name)) {
-                _fireEvent(EVENT_ERR, "init failed", nullptr, 0);
+                _fireEvent(EVENT_ERR_INIT, nullptr, 0);
                 return false;
             }
 
             _server = NimBLEDevice::createServer();
             if (_server == nullptr) {
-                _fireEvent(EVENT_ERR, "create server failed", nullptr, 0);
+                _fireEvent(EVENT_ERR_SERVER, nullptr, 0);
                 return false;
             }
 
@@ -190,7 +190,7 @@ namespace {
 
             NimBLEService* midiService = _server->createService(_config.midiServiceUuid);
             if (midiService == nullptr) {
-                _fireEvent(EVENT_ERR, "create service failed", nullptr, 0);
+                _fireEvent(EVENT_ERR_SERVICE, nullptr, 0);
                 return false;
             }
 
@@ -204,7 +204,7 @@ namespace {
             );
 
             if (_characteristic == nullptr) {
-                _fireEvent(EVENT_ERR, "create characteristic failed", nullptr, 0);
+                _fireEvent(EVENT_ERR_CHAR, nullptr, 0);
                 return false;
             }
 
@@ -217,7 +217,7 @@ namespace {
 
         NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
         if (advertising == nullptr) {
-            _fireEvent(EVENT_ERR, "get advertising failed", nullptr, 0);
+            _fireEvent(EVENT_ERR_ADVERT, nullptr, 0);
             return false;
         }
 
@@ -231,7 +231,7 @@ namespace {
 
         _enabled = true;
 
-        _fireEvent(EVENT_ENABLED, "transport enabled", nullptr, 0);
+        _fireEvent(EVENT_ENABLED, nullptr, 0);
         return true;
     }
 
@@ -248,7 +248,7 @@ namespace {
             }
 
             _deinitPending = true;
-            _fireEvent(EVENT_NOTICE, "waiting for disconnection", nullptr, 0);
+            _fireEvent(EVENT_NOTICE_WAIT, nullptr, 0);
             return;
         }
 
@@ -268,12 +268,12 @@ namespace {
 
     bool write(uint8_t* data, uint32_t len) {
         if (data == nullptr || len == 0) {
-            _fireEvent(EVENT_WARN, "write ignored: empty data", nullptr, 0);
+            _fireEvent(EVENT_WARN_NODATA, nullptr, 0);
             return false;
         }
 
         if (!_enabled || !NimBLEDevice::isInitialized() || _characteristic == nullptr) {
-            _fireEvent(EVENT_WARN, "write ignored: transport not ready", nullptr, 0);
+            _fireEvent(EVENT_WARN_TRANSP_NOT_READY, nullptr, 0);
             return false;
         }
 
@@ -281,7 +281,7 @@ namespace {
         _characteristic->notify();
         _processMidiPayload(data, len);
 
-        _fireEvent(EVENT_WRITE, "write", data, len);
+        _fireEvent(EVENT_WRITE, data, len);
         return true;
     }
 
@@ -305,6 +305,28 @@ namespace {
     uint16_t connectedCount() {
         if (!NimBLEDevice::isInitialized() || _server == nullptr) return 0;
         return _server->getConnectedCount();
+    }
+
+    const char* eventName(EventCode code) {
+        switch (code) {
+            case EVENT_ERR_ADVERT:    return "advertising error";
+            case EVENT_ERR_CHAR:      return "characteristic error";
+            case EVENT_ERR_SERVICE:   return "service error";
+            case EVENT_ERR_SERVER:    return "server error";
+            case EVENT_ERR_INIT:      return "init error";
+            case EVENT_WARN_TRANSP_NOT_READY: return "write ignored, transport not ready";
+            case EVENT_WARN_NODATA:   return "write ignored, no data";
+            case EVENT_INIT:          return "init";
+            case EVENT_NOTICE_WAIT:   return "waiting for disconnection";
+            case EVENT_CONNECT:       return "short pressed";
+            case EVENT_DISCONNECT:    return "holding down";
+            case EVENT_ENABLED:       return "long pressed";
+            case EVENT_ADVERTISING:   return "advertising";
+            case EVENT_DISABLED:      return "disabled";
+            case EVENT_READ:          return "read";
+            case EVENT_WRITE:         return "write";
+        }
+        return "unknown";
     }
 
 }

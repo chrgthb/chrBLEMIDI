@@ -8,9 +8,10 @@ constexpr uint32_t NOTE_INTERVAL_MS = 1000;
 uint32_t lastNoteTime = 0;
 bool noteIsOn = false;
 
-void onMidiEvent(int8_t code, const char* action, uint8_t* data, uint32_t len) {
+void onMidiEvent(int8_t code, uint8_t* data, uint32_t len) {
+    const auto eventCode = static_cast<chrBLEMIDI::EventCode>(code);
     Serial.printf("MIDI event %d: %s (%lu bytes)",
-                  code, action ? action : "", static_cast<unsigned long>(len));
+                  code, chrBLEMIDI::eventName(eventCode), static_cast<unsigned long>(len));
 
     if (code == chrBLEMIDI::EVENT_READ && data != nullptr) {
         Serial.print(" data=");

@@ -26,9 +26,10 @@ Register an event callback, configure the peripheral, and enable it:
 #include <Arduino.h>
 #include "chrBLEMIDI.h"
 
-void onMidiEvent(int8_t code, const char* action, uint8_t* data, uint32_t len) {
+void onMidiEvent(int8_t code, uint8_t* data, uint32_t len) {
+    const auto eventCode = static_cast<chrBLEMIDI::EventCode>(code);
     Serial.printf("MIDI event %d: %s (%lu bytes)\n",
-                  code, action ? action : "", static_cast<unsigned long>(len));
+                  code, chrBLEMIDI::eventName(eventCode), static_cast<unsigned long>(len));
 }
 
 void setup() {
@@ -80,14 +81,19 @@ Pass the configured value to `setup()` before calling `enable()`.
 
 ## Events and Lifecycle
 
-Register one `EventCallback` with `setEventCallback()`. Each event provides a numeric code, a short action string, an optional data pointer, and its length. Event codes are declared in [src/chrBLEMIDI.h](src/chrBLEMIDI.h):
+Register one `EventCallback` with `setEventCallback()`. Each event provides a numeric code, an optional data pointer, and its length. Use `eventName()` to get the event's short name. Data-less events pass `nullptr` and a length of zero. Event codes are declared in [src/chrBLEMIDI.h](src/chrBLEMIDI.h):
 
 | Code | Value | Meaning |
 | --- | ---: | --- |
-| `EVENT_ERR` | -10 | Operation failed |
-| `EVENT_WARN` | -1 | Operation was ignored or needs attention |
-| `EVENT_OK` | 0 | General success |
-| `EVENT_NOTICE` | 10 | Informational transport state |
+| `EVENT_ERR_ADVERT` | -30 | Advertising failed or advertising could not be obtained |
+| `EVENT_ERR_CHAR` | -25 | MIDI characteristic creation failed |
+| `EVENT_ERR_SERVICE` | -20 | MIDI service creation failed |
+| `EVENT_ERR_SERVER` | -15 | BLE server creation failed |
+| `EVENT_ERR_INIT` | -10 | NimBLE initialization failed |
+| `EVENT_WARN_TRANSP_NOT_READY` | -6 | Write ignored because the transport is not ready |
+| `EVENT_WARN_NODATA` | -5 | Write ignored because the data is empty |
+| `EVENT_INIT` | 0 | Configuration/setup initialized |
+| `EVENT_NOTICE_WAIT` | 10 | Waiting for client disconnection before disabling |
 | `EVENT_CONNECT` | 20 | BLE client connected |
 | `EVENT_DISCONNECT` | 22 | BLE client disconnected |
 | `EVENT_ENABLED` | 24 | Transport enabled |

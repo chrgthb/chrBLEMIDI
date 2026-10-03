@@ -1,6 +1,6 @@
 {
   "name": "chrBLEMIDI",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "BLE MIDI library for the Arduino framework using NimBLE-Arduino",
   "keywords": "esp32S3, arduino, ble, midi",
   "repository": {
